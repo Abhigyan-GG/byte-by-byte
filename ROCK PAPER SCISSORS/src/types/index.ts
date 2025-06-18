@@ -31,11 +31,14 @@ export interface GameRoom {
   gameState: 'waiting' | 'playing' | 'finished';
   round: number;
   maxRounds: number;
+  currentRound: number;
 }
 
 export interface RoundResult {
+  round: number;
   result: 'player1' | 'player2' | 'tie';
   players: MultiplayerPlayer[];
-  round: number;
-  choices: Record<string, string>;
+  playerChoices: {
+    [playerId: string]: string; // 'rock', 'paper', or 'scissors'
+  };
 }
