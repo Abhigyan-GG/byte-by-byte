@@ -53,7 +53,6 @@ const MultiplayerGame: React.FC = () => {
       if (joinedPlayer) setCurrentPlayer(joinedPlayer);
       if (otherPlayer) setOpponent(otherPlayer);
 
-      setCurrentRoom(room);
       setGameState('playing');
       setMessage(`${newPlayer.name} joined the game!`);
     });
@@ -90,7 +89,7 @@ const MultiplayerGame: React.FC = () => {
       }, 3000);
     });
 
-    socketService.onGameFinished(({ winner, finalScores }) => {
+    socketService.onGameFinished(({ winner }) => {
       setGameState('finished');
       if (winner) {
         setMessage(`🎉 ${winner.name} wins the game!`);
@@ -160,22 +159,104 @@ const MultiplayerGame: React.FC = () => {
     }
   };
 
-  if (!isConnected) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-        <div className="text-white text-xl">Connecting to server...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-white text-center mb-8">
-          🪨📄✂️ Multiplayer Rock Paper Scissors
-        </h1>
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4 text-white flex flex-col items-center justify-center">
+      <div className="max-w-2xl w-full">
+        <h1 className="text-3xl font-bold text-center mb-6">🪨📄✂️ Rock Paper Scissors - Multiplayer</h1>
 
-        {/* You can restore previous UI here */}
+        {gameState === 'menu' && (
+          <div className="space-y-4">
+            <input
+              className="w-full px-4 py-2 rounded bg-white text-black"
+              placeholder="Enter your name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+            />
+            <div className="flex space-x-2">
+              <button
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded"
+                onClick={createRoom}
+              >
+                Create Room
+              </button>
+              <input
+                className="w-24 px-2 py-2 rounded bg-white text-black"
+                placeholder="Code"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value)}
+              />
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                onClick={joinRoom}
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        )}
+
+        {gameState === 'waiting' && (
+          <div className="text-center space-y-4">
+            <p>Waiting for opponent to join...</p>
+            <p className="text-lg font-bold">Room Code: {roomCode}</p>
+            <p className="italic">{message}</p>
+            <button
+              className="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+              onClick={resetToMenu}
+            >
+              Back to Menu
+            </button>
+          </div>
+        )}
+
+        {gameState === 'playing' && currentPlayer && opponent && (
+          <div className="space-y-4 text-center">
+            <div className="flex justify-between text-lg font-semibold">
+              <div>{currentPlayer.name}: {currentPlayer.score}</div>
+              <div>{opponent.name}: {opponent.score}</div>
+            </div>
+
+            <div className="flex justify-center space-x-4 text-3xl">
+              {['rock', 'paper', 'scissors'].map((choice) => (
+                <button
+                  key={choice}
+                  className="hover:scale-110 transition"
+                  onClick={() => makeChoice(choice)}
+                  disabled={!!playerChoice}
+                >
+                  {getChoiceEmoji(choice)}
+                </button>
+              ))}
+            </div>
+
+            {roundResult && (
+              <div className="text-xl mt-4">
+                You chose {getChoiceEmoji(roundResult.players.find(p => p.id === currentPlayer.id)?.choice!)}. <br />
+                {opponent.name} chose {getChoiceEmoji(roundResult.players.find(p => p.id === opponent.id)?.choice!)}.
+              </div>
+            )}
+
+            <p className="italic mt-4">{message}</p>
+          </div>
+        )}
+
+        {gameState === 'finished' && (
+          <div className="text-center space-y-4">
+            <p className="text-2xl font-bold">{message}</p>
+            <button
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+              onClick={startNewGame}
+            >
+              Start New Game
+            </button>
+            <button
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+              onClick={resetToMenu}
+            >
+              Back to Menu
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
