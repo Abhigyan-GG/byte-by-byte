@@ -7,7 +7,7 @@ class SocketService {
   private socket: Socket | null = null;
   private serverUrl =
     process.env.NODE_ENV === 'production'
-      ? 'https://your-deployed-backend.com' // ✅ Use actual deployed backend
+      ? 'https://rps-backend-byxk.onrender.com' 
       : 'http://localhost:3001';
 
   connect(): Promise<void> {
