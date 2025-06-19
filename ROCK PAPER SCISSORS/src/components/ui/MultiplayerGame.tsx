@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { socketService } from '../../utils/socketService';
 import type { GameRoom, MultiplayerPlayer as Player, RoundResult } from '../../types';
+import RoundTimer from './RoundTimer.tsx';
 
 const MultiplayerGame: React.FC = () => {
   const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished'>('menu');
