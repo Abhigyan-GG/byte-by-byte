@@ -12,7 +12,7 @@ class SocketService {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.socket = io(this.serverUrl); // Add options if needed
+      this.socket = io(this.serverUrl);
       this.socket.on('connect', () => {
         console.log('Connected to server');
         resolve();
@@ -36,7 +36,7 @@ class SocketService {
   }
 
   joinRoom(roomCode: string, playerName: string) {
-    this.socket?.emit('joinRoom', { roomCode, playerName });
+    this.socket.emit('joinRoom', roomCode, playerName);
   }
 
   makeChoice(roomCode: string, choice: string) {
