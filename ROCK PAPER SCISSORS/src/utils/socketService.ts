@@ -54,6 +54,10 @@ class SocketService {
   onPlayerJoined(callback: (data: { room: GameRoom; newPlayer: MultiplayerPlayer }) => void) {
     this.socket?.on('playerJoined', callback);
   }
+  
+  onRoundStarted(callback: () => void) {
+  this.socket?.on('roundStarted', callback);
+}
 
   onPlayerMadeChoice(callback: (data: { playerName: string }) => void) {
     this.socket?.on('playerMadeChoice', callback);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { socketService } from '../../utils/socketService';
 import type { GameRoom, MultiplayerPlayer as Player, RoundResult } from '../../types';
 import RoundTimer from './RoundTimer.tsx';
@@ -15,6 +15,11 @@ const MultiplayerGame: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [playerChoice, setPlayerChoice] = useState<string | null>(null);
   const [opponentChoice, setOpponentChoice] = useState<string | null>(null);
+  const [roundStartTime, setRoundStartTime] = useState<number | null>(null);
+  const [bothPlayersReady, setBothPlayersReady] = useState(false);
+  
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const ROUND_DURATION = 30000; // 30 seconds in milliseconds
 
   useEffect(() => {
     const connectSocket = async () => {
@@ -30,10 +35,54 @@ const MultiplayerGame: React.FC = () => {
     connectSocket();
 
     return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
       socketService.removeAllListeners();
       socketService.disconnect();
     };
   }, []);
+
+  // Auto-submit when timer expires
+  useEffect(() => {
+    if (roundStartTime && gameState === 'playing' && !roundResult) {
+      timerRef.current = setTimeout(() => {
+        if (!playerChoice && currentRoom) {
+          // Auto-submit random choice if player hasn't chosen
+          const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          setPlayerChoice(randomChoice);
+          socketService.makeChoice(currentRoom.id, randomChoice);
+          setMessage('Time up! Random choice submitted...');
+        }
+      }, ROUND_DURATION);
+
+      return () => {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+        }
+      };
+    }
+  }, [roundStartTime, gameState, roundResult, playerChoice, currentRoom]);
+
+  // Auto-submit when both players are ready
+  useEffect(() => {
+    if (bothPlayersReady && playerChoice && opponentChoice && currentRoom && !roundResult) {
+      // Clear the timer since both players have made choices
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      // The server should handle the round result when both choices are made
+      setMessage('Both players ready! Revealing results...');
+    }
+  }, [bothPlayersReady, playerChoice, opponentChoice, currentRoom, roundResult]);
+
+  const startNewRound = () => {
+    setRoundStartTime(Date.now());
+    setPlayerChoice(null);
+    setOpponentChoice(null);
+    setBothPlayersReady(false);
+    setMessage('Make your choice! You have 30 seconds...');
+  };
 
   const setupSocketListeners = () => {
     socketService.onRoomCreated(({ roomCode, player }) => {
@@ -58,14 +107,39 @@ const MultiplayerGame: React.FC = () => {
       setMessage(`${newPlayer.name} joined the game!`);
     });
 
+    // Listen for server-synchronized round start
+    socketService.onRoundStarted(() => {
+      startNewRound();
+    });
+
     socketService.onPlayerMadeChoice(({ playerName }) => {
       setMessage(`${playerName} made their choice...`);
+      
+      // Check if opponent made a choice
+      const socketId = socketService.socketInstance?.id;
+      if (socketId && currentPlayer && opponent) {
+        if (playerName === opponent.name) {
+          setOpponentChoice('made'); // We don't know the actual choice yet
+        }
+        
+        // If both players have made choices, set the flag
+        if (playerChoice && playerName === opponent.name) {
+          setBothPlayersReady(true);
+        }
+      }
     });
 
     socketService.onRoundResult((result) => {
+      // Clear timer when round result is received
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+
       setRoundResult(result);
       setPlayerChoice(null);
       setOpponentChoice(null);
+      setBothPlayersReady(false);
+      setRoundStartTime(null);
 
       let resultMessage = '';
       if (result.result === 'tie') {
@@ -85,12 +159,17 @@ const MultiplayerGame: React.FC = () => {
       setTimeout(() => {
         setRoundResult(null);
         if (result.round < currentRoom?.maxRounds!) {
-          setMessage('Choose your next move!');
+          startNewRound();
         }
       }, 3000);
     });
 
     socketService.onGameFinished(({ winner, finalScores }) => {
+      // Clear timer when game finishes
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      
       setGameState('finished');
       if (winner) {
         setMessage(`🎉 ${winner.name} wins the game!`);
@@ -100,6 +179,9 @@ const MultiplayerGame: React.FC = () => {
     });
 
     socketService.onPlayerDisconnected(({ playerName }) => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
       setMessage(`${playerName} disconnected`);
       setGameState('waiting');
       setOpponent(null);
@@ -122,15 +204,20 @@ const MultiplayerGame: React.FC = () => {
     if (trimmedName && trimmedCode) {
       console.log(`🧪 Attempting to join room: ${trimmedCode}, player: ${trimmedName}`);
       socketService.joinRoom(trimmedCode, trimmedName);
-  }
-};
-
+    }
+  };
 
   const makeChoice = (choice: string) => {
-    if (currentRoom && gameState === 'playing') {
+    if (currentRoom && gameState === 'playing' && !playerChoice) {
       setPlayerChoice(choice);
       socketService.makeChoice(currentRoom.id, choice);
-      setMessage('Waiting for opponent...');
+      
+      // Check if opponent has already made a choice
+      if (opponentChoice) {
+        setBothPlayersReady(true);
+      } else {
+        setMessage('Waiting for opponent...');
+      }
     }
   };
 
@@ -140,10 +227,16 @@ const MultiplayerGame: React.FC = () => {
       setGameState('playing');
       setMessage('New game started!');
       setRoundResult(null);
+      setTimeout(() => {
+        startNewRound();
+      }, 1000);
     }
   };
 
   const resetToMenu = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
     setGameState('menu');
     setCurrentRoom(null);
     setCurrentPlayer(null);
@@ -153,6 +246,8 @@ const MultiplayerGame: React.FC = () => {
     setMessage('');
     setPlayerChoice(null);
     setOpponentChoice(null);
+    setRoundStartTime(null);
+    setBothPlayersReady(false);
   };
 
   const getChoiceEmoji = (choice: string) => {
@@ -229,6 +324,19 @@ const MultiplayerGame: React.FC = () => {
               <span>{opponent.name} <br /> {opponent.score}</span>
             </div>
 
+            {/* Timer Display */}
+            {roundStartTime && !roundResult && currentRoom && (
+              <div className="mb-4">
+                <RoundTimer 
+                  round={currentRoom.currentRound}
+                  duration={30}
+                  playerChoice={playerChoice}
+                  roomId={currentRoom.id}
+                  isDisabled={!!playerChoice}
+                />
+              </div>
+            )}
+
             {roundResult ? (
               <div className="text-xl font-semibold">
                 <p>{message}</p>
@@ -243,15 +351,26 @@ const MultiplayerGame: React.FC = () => {
                     <button
                       key={choice}
                       onClick={() => makeChoice(choice)}
-                      className={`text-4xl p-4 rounded-full border-2 ${playerChoice === choice ? 'bg-purple-300' : 'hover:bg-purple-100'}`}
+                      className={`text-4xl p-4 rounded-full border-2 transition-all ${
+                        playerChoice === choice 
+                          ? 'bg-purple-300 border-purple-500' 
+                          : 'hover:bg-purple-100 border-gray-300'
+                      }`}
                       disabled={!!playerChoice}
                     >
                       {getChoiceEmoji(choice)}
                     </button>
                   ))}
                 </div>
+                {playerChoice && (
+                  <p className="mt-4 text-green-600 font-semibold">
+                    ✅ You chose {getChoiceEmoji(playerChoice)}
+                  </p>
+                )}
               </div>
             )}
+
+            <p className="text-sm text-gray-600">{message}</p>
           </div>
         )}
 
