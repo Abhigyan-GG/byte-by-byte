@@ -116,10 +116,14 @@ const MultiplayerGame: React.FC = () => {
   };
 
   const joinRoom = () => {
-    if (playerName.trim() && roomCode.trim()) {
-      socketService.joinRoom(roomCode.trim().toUpperCase(), playerName.trim());
-    }
-  };
+    const trimmedCode = roomCode.trim().toUpperCase();
+    const trimmedName = playerName.trim();
+    if (trimmedName && trimmedCode) {
+      console.log(`🧪 Attempting to join room: ${trimmedCode}, player: ${trimmedName}`);
+      socketService.joinRoom(trimmedCode, trimmedName);
+  }
+};
+
 
   const makeChoice = (choice: string) => {
     if (currentRoom && gameState === 'playing') {

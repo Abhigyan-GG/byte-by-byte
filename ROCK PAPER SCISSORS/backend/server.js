@@ -52,9 +52,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', (roomCode, playerName) => {
+      console.log(`🧪 joinRoom received: roomCode = '${roomCode}', playerName = '${playerName}'`);
+      console.log("📦 Rooms available:", Array.from(rooms.keys()));
+    
     const room = rooms.get(roomCode);
-    if (!room) {
-      socket.emit('error', 'Room not found');
+    if (!room) {    
+      console.log(`❌ Room '${roomCode}' not found`);
+      socket.emit('roomError', 'Room not found');
       return;
     }
     if (room.players.length >= 2) {
