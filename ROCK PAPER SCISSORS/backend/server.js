@@ -98,6 +98,7 @@ function processRound(roomCode) {
   };
 
   io.to(roomCode).emit('roundResult', roundResult);
+  io.to(roomCode).emit('roomUpdated', room);
 
   // Reset choices for next round
   player1.choice = null;

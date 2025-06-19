@@ -54,7 +54,7 @@ class SocketService {
   onPlayerJoined(callback: (data: { room: GameRoom; newPlayer: MultiplayerPlayer }) => void) {
     this.socket?.on('playerJoined', callback);
   }
-  
+
   onRoundStarted(callback: () => void) {
   this.socket?.on('roundStarted', callback);
 }
@@ -86,6 +86,10 @@ class SocketService {
   removeAllListeners() {
     this.socket?.removeAllListeners();
   }
+
+  onRoomUpdated(callback: (room: GameRoom) => void) {
+  this.socket?.on('roomUpdated', callback);
+}
 
   get socketInstance() {
     return this.socket;
