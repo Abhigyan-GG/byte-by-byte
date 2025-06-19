@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { socketService } from '../../utils/socketService';
 import type { GameRoom, MultiplayerPlayer as Player, RoundResult } from '../../types';
-import RoundTimer from './RoundTimer.tsx';
+import RoundTimer from './RoundTimer';
 
 const MultiplayerGame: React.FC = () => {
   const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished'>('menu');
@@ -152,13 +152,13 @@ const MultiplayerGame: React.FC = () => {
 
       setTimeout(() => {
         setRoundResult(null);
-        if (result.round < currentRoom?.maxRounds!) {
+        if (currentRoom && result.round < currentRoom.maxRounds) {
           startNewRound();
         }
       }, 3000);
     });
 
-    socketService.onGameFinished(({ winner, finalScores }) => {
+    socketService.onGameFinished(({ winner }) => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
@@ -264,7 +264,209 @@ const MultiplayerGame: React.FC = () => {
           🪨📄✂️ Multiplayer Rock Paper Scissors
         </h1>
 
-        {/* Your existing game UI remains unchanged */}
+        {/* Menu State */}
+        {gameState === 'menu' && (
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md mx-auto">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+              Join or Create Game
+            </h2>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              
+              <button
+                onClick={createRoom}
+                disabled={!playerName.trim()}
+                className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+              >
+                Create Room
+              </button>
+              
+              <div className="text-center text-gray-500">or</div>
+              
+              <input
+                type="text"
+                placeholder="Enter room code"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              
+              <button
+                onClick={joinRoom}
+                disabled={!playerName.trim() || !roomCode.trim()}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+              >
+                Join Room
+              </button>
+            </div>
+            
+            {message && (
+              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Waiting State */}
+        {gameState === 'waiting' && (
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md mx-auto text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              Waiting for Opponent
+            </h2>
+            <div className="text-lg mb-4">Room Code: <span className="font-mono font-bold text-purple-600">{roomCode}</span></div>
+            <div className="text-gray-600 mb-6">Share this code with a friend!</div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <button
+              onClick={resetToMenu}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
+            >
+              Back to Menu
+            </button>
+          </div>
+        )}
+
+        {/* Playing State */}
+        {gameState === 'playing' && (
+          <div className="space-y-6">
+            {/* Score Display */}
+            {currentPlayer && opponent && (
+              <div className="bg-white rounded-lg shadow-xl p-6">
+                <div className="flex justify-between items-center">
+                  <div className="text-center">
+                    <div className="font-semibold text-lg">{currentPlayer.name} (You)</div>
+                    <div className="text-2xl font-bold text-purple-600">{currentPlayer.score}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-gray-500">VS</div>
+                    <div className="text-sm">Round {currentRoom?.round || 1} of {currentRoom?.maxRounds || 3}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-semibold text-lg">{opponent.name}</div>
+                    <div className="text-2xl font-bold text-blue-600">{opponent.score}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Timer */}
+            {roundStartTime && !roundResult && (
+              <RoundTimer 
+                startTime={roundStartTime} 
+                duration={ROUND_DURATION}
+                onTimeUp={() => {}}
+              />
+            )}
+
+            {/* Game Area */}
+            <div className="bg-white rounded-lg shadow-xl p-8">
+              {roundResult ? (
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold mb-4">Round Result</h3>
+                  <div className="flex justify-center items-center space-x-8 mb-4">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600">{currentPlayer?.name}</div>
+                      <div className="text-4xl">{getChoiceEmoji(roundResult.choices.player1)}</div>
+                    </div>
+                    <div className="text-2xl">VS</div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600">{opponent?.name}</div>
+                      <div className="text-4xl">{getChoiceEmoji(roundResult.choices.player2)}</div>
+                    </div>
+                  </div>
+                  <div className="text-xl font-semibold">{message}</div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <h3 className="text-2xl font-bold mb-6">Make Your Choice</h3>
+                  
+                  <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+                    {['rock', 'paper', 'scissors'].map((choice) => (
+                      <button
+                        key={choice}
+                        onClick={() => makeChoice(choice)}
+                        disabled={!!playerChoice}
+                        className={`p-6 rounded-lg border-2 text-4xl transition-all ${
+                          playerChoice === choice
+                            ? 'border-purple-500 bg-purple-100 scale-110'
+                            : playerChoice
+                            ? 'border-gray-300 bg-gray-100 opacity-50'
+                            : 'border-gray-300 hover:border-purple-400 hover:scale-105'
+                        }`}
+                      >
+                        {getChoiceEmoji(choice)}
+                        <div className="text-sm mt-2 capitalize">{choice}</div>
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-6">
+                    <div className="text-lg">{message}</div>
+                    {playerChoice && (
+                      <div className="text-green-600 mt-2">✓ Choice submitted!</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={resetToMenu}
+                className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600 transition-colors"
+              >
+                Leave Game
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Finished State */}
+        {gameState === 'finished' && (
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md mx-auto text-center">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Game Over!</h2>
+            
+            {currentPlayer && opponent && (
+              <div className="mb-6">
+                <div className="text-lg mb-4">Final Scores:</div>
+                <div className="flex justify-between items-center bg-gray-100 p-4 rounded">
+                  <div>
+                    <div className="font-semibold">{currentPlayer.name}</div>
+                    <div className="text-2xl font-bold text-purple-600">{currentPlayer.score}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">{opponent.name}</div>
+                    <div className="text-2xl font-bold text-blue-600">{opponent.score}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="text-xl font-semibold mb-6">{message}</div>
+            
+            <div className="space-y-3">
+              <button
+                onClick={startNewGame}
+                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+              >
+                Play Again
+              </button>
+              <button
+                onClick={resetToMenu}
+                className="w-full bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+              >
+                Back to Menu
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
