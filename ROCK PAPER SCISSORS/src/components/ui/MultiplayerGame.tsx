@@ -13,8 +13,6 @@ interface GameHistoryItem {
 
 export const useMultiplayerGame = () => {
   // Game State
-  const choiceSentRef = useRef(false);
-  const timerActiveRef = useRef(false); 
   const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished' | 'connecting'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -26,7 +24,6 @@ export const useMultiplayerGame = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [playerChoice, setPlayerChoice] = useState<string | null>(null);
   const [opponentChoice, setOpponentChoice] = useState<string | null>(null);
-  const [roundStartTime, setRoundStartTime] = useState<number | null>(null);
   const [bothPlayersReady, setBothPlayersReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionError, setConnectionError] = useState('');
@@ -37,27 +34,99 @@ export const useMultiplayerGame = () => {
   const [playerStats, setPlayerStats] = useState({ wins: 0, losses: 0, ties: 0 });
   const [reconnecting, setReconnecting] = useState(false);
 
-  // Refs
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const timerStateRef = useRef({
+    isActive: false,
+    startTime: 0,
+    choiceMade: false,
+    intervalId: null as NodeJS.Timeout | null,
+    roundId: 0 
+  });
+
   const ROUND_DURATION = 10000;
 
-
-  const clearAllTimers = useCallback(() => {
-    console.log('🧹 Clearing all timers');
-    timerActiveRef.current = false; 
+  const stopTimer = useCallback(() => {
+    console.log('🛑 STOPPING TIMER - Current state:', timerStateRef.current);
     
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+    timerStateRef.current.isActive = false;
+    timerStateRef.current.choiceMade = true;
+    
+    if (timerStateRef.current.intervalId) {
+      clearInterval(timerStateRef.current.intervalId);
+      timerStateRef.current.intervalId = null;
     }
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
+    
+    console.log('✅ Timer stopped successfully');
   }, []);
 
-  // Sound effects
+  const startTimer = useCallback(() => {
+    stopTimer();
+    
+    const roundId = Date.now(); 
+    console.log('▶️ STARTING TIMER for round:', roundId);
+    
+    timerStateRef.current = {
+      isActive: true,
+      startTime: Date.now(),
+      choiceMade: false,
+      intervalId: null,
+      roundId
+    };
+    
+    setTimeLeft(10);
+    
+    const updateTimer = () => {
+      const state = timerStateRef.current;
+
+      if (!state.isActive || state.choiceMade || state.roundId !== roundId) {
+        console.log('⏹️ Timer instance invalid, stopping:', {
+          isActive: state.isActive,
+          choiceMade: state.choiceMade,
+          correctRound: state.roundId === roundId
+        });
+        
+        if (state.intervalId) {
+          clearInterval(state.intervalId);
+          state.intervalId = null;
+        }
+        return;
+      }
+      
+      const elapsed = Date.now() - state.startTime;
+      const remaining = Math.max(0, Math.ceil((ROUND_DURATION - elapsed) / 1000));
+      
+      setTimeLeft(remaining);
+
+      if (remaining <= 0 && 
+          state.isActive && 
+          !state.choiceMade && 
+          state.roundId === roundId &&
+          currentRoom &&
+          gameState === 'playing') {
+        
+        console.log('⏰ AUTO-SUBMITTING - Final checks passed');
+
+        state.choiceMade = true;
+        state.isActive = false;
+        
+        const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+        setPlayerChoice(randomChoice);
+        socketService.makeChoice(currentRoom.id, randomChoice);
+        setMessage('⏰ Time up! Random choice submitted...');
+
+        if (state.intervalId) {
+          clearInterval(state.intervalId);
+          state.intervalId = null;
+        }
+      }
+    };
+
+    const intervalId = setInterval(updateTimer, 100);
+    timerStateRef.current.intervalId = intervalId;
+    
+    updateTimer();
+    
+  }, [stopTimer, currentRoom, gameState]);
+
   const playSound = useCallback((type: string) => {
     if (!soundEnabled) return;
     
@@ -93,105 +162,55 @@ export const useMultiplayerGame = () => {
     }
   }, [soundEnabled]);
 
-
   const startNewRound = useCallback(() => {
-    console.log('🎯 Starting new round - resetting choice state');
-    
+    console.log('🎯 Starting new round');
 
-    clearAllTimers();
-    
-
-    choiceSentRef.current = false;
     setPlayerChoice(null);
     setOpponentChoice(null);
     setRoundResult(null);
     setBothPlayersReady(false);
-    
-    // Set round timing
-    setRoundStartTime(Date.now());
-    setTimeLeft(10);
     setMessage('🎯 Make your choice! You have 10 seconds...');
     
-    console.log('✅ Choice state reset complete');
-  }, [clearAllTimers]);
-
-
-  useEffect(() => {
+    // Start the timer
+    startTimer();
     
-    if (roundStartTime && 
-        gameState === 'playing' && 
-        !roundResult && 
-        !playerChoice && 
-        !choiceSentRef.current) {
-      
-      console.log('⏱️ Starting countdown timer');
-      timerActiveRef.current = true;
-      
-      const updateCountdown = () => {
+  }, [startTimer]);
 
-        if (!timerActiveRef.current || choiceSentRef.current) {
-          console.log('⏹️ Timer stopped - choice already made');
-          if (countdownRef.current) {
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
-          }
-          return;
-        }
-        
-        const now = Date.now();
-        const elapsed = now - roundStartTime;
-        const remaining = Math.max(0, Math.ceil((ROUND_DURATION - elapsed) / 1000));
-        
-        setTimeLeft(remaining);
-        
-
-        if (remaining <= 0 && 
-            !choiceSentRef.current && 
-            timerActiveRef.current && 
-            currentRoom) {
-          
-          console.log('⏰ Time up! Auto-submitting random choice');
-          
-
-          timerActiveRef.current = false;
-          choiceSentRef.current = true;
-          
-          const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
-          setPlayerChoice(randomChoice);
-          socketService.makeChoice(currentRoom.id, randomChoice);
-          setMessage('⏰ Time up! Random choice submitted...');
-          
-          // Clear the timer
-          if (countdownRef.current) {
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
-          }
-        }
-      };
-
-
-      updateCountdown();
-      
-
-      countdownRef.current = setInterval(updateCountdown, 100);
-
-
-      return () => {
-        console.log('🧹 Cleaning up timer effect');
-        timerActiveRef.current = false;
-        if (countdownRef.current) {
-          clearInterval(countdownRef.current);
-          countdownRef.current = null;
-        }
-      };
+  const makeChoice = useCallback((choice: string) => {
+    console.log('🎯 Making choice:', choice);
+    console.log('Timer state before choice:', timerStateRef.current);
+    
+    if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
+      console.warn('❌ Cannot make choice - invalid state');
+      return;
     }
-  }, [roundStartTime, gameState, roundResult, playerChoice, currentRoom]);
+    
+    if (timerStateRef.current.choiceMade) {
+      console.warn('❌ Choice already made this round');
+      return;
+    }
+    
+    if (timeLeft <= 0) {
+      console.warn('❌ Time is up');
+      return;
+    }
 
-  // Socket listeners setup
+    console.log('🛑 Stopping timer for manual choice');
+    stopTimer();
+
+    setPlayerChoice(choice);
+    socketService.makeChoice(currentRoom.id, choice);
+    setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
+
+    if (navigator.vibrate) navigator.vibrate(50);
+    playSound('choice');
+    
+    console.log('✅ Choice made successfully');
+  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, stopTimer, playSound]);
+
   const setupSocketListeners = useCallback(() => {
     console.log('🔧 Setting up socket listeners');
     
-
     socketService.removeAllListeners();
 
     socketService.onRoomCreated(({ roomCode, player }) => {
@@ -244,13 +263,11 @@ export const useMultiplayerGame = () => {
 
     socketService.onRoundResult((result) => {
       console.log('🎲 Round result received:', result);
-      
 
-      clearAllTimers();
+      stopTimer();
 
       setRoundResult(result);
       setBothPlayersReady(false);
-      setRoundStartTime(null);
       setTimeLeft(0);
 
       const socketId = socketService.socketInstance?.id;
@@ -260,7 +277,6 @@ export const useMultiplayerGame = () => {
       if (updatedCurrentPlayer) setCurrentPlayer(updatedCurrentPlayer);
       if (updatedOpponent) setOpponent(updatedOpponent);
 
-
       const roundData: GameHistoryItem = {
         round: result.round,
         playerChoice: result.playerChoices?.[0] || '',
@@ -269,7 +285,6 @@ export const useMultiplayerGame = () => {
         timestamp: new Date().toLocaleTimeString()
       };
       setGameHistory(prev => [...prev, roundData]);
-
 
       if (result.result === 'tie') {
         setPlayerStats(prev => ({ ...prev, ties: prev.ties + 1 }));
@@ -298,7 +313,6 @@ export const useMultiplayerGame = () => {
       }
       setMessage(resultMessage);
 
-
       setTimeout(() => {
         console.log('🔄 Preparing for next round...');
         setRoundResult(null);
@@ -311,7 +325,7 @@ export const useMultiplayerGame = () => {
 
     socketService.onGameFinished(({ winner }) => {
       console.log('🏁 Game finished');
-      clearAllTimers();
+      stopTimer();
       
       setGameState('finished');
       const socketId = socketService.socketInstance?.id;
@@ -329,7 +343,7 @@ export const useMultiplayerGame = () => {
 
     socketService.onPlayerDisconnected(({ playerName }) => {
       console.log('👤 Player disconnected:', playerName);
-      clearAllTimers();
+      stopTimer();
       
       setMessage(`📱 ${playerName} disconnected. Waiting for reconnection...`);
       setGameState('waiting');
@@ -341,7 +355,7 @@ export const useMultiplayerGame = () => {
       setMessage(`❌ Error: ${error}`);
       setConnectionError(error);
     });
-  }, [startNewRound, playSound, clearAllTimers, currentPlayer, opponent, currentRoom]);
+  }, [startNewRound, playSound, stopTimer, currentPlayer, opponent, currentRoom]);
 
   // Connection management
   useEffect(() => {
@@ -377,13 +391,13 @@ export const useMultiplayerGame = () => {
     }
 
     return () => {
-      clearAllTimers();
+      stopTimer();
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [clearAllTimers]);
+  }, [stopTimer]);
 
-
+  // Setup listeners when connected
   useEffect(() => {
     if (isConnected) {
       setupSocketListeners();
@@ -409,83 +423,16 @@ export const useMultiplayerGame = () => {
     }
   }, [roomCode, playerName]);
 
- 
-  const makeChoice = useCallback((choice: string) => {
-    console.log('🎯 Attempting to make choice:', choice);
-    console.log('State check:', {
-      hasRoom: !!currentRoom,
-      gameState,
-      choiceSent: choiceSentRef.current,
-      timerActive: timerActiveRef.current,
-      hasPlayerChoice: !!playerChoice,
-      hasRoundResult: !!roundResult,
-      timeLeft
-    });
-
-    // Check all conditions for making a choice
-    if (!currentRoom) {
-      console.warn('❌ No current room');
-      return;
-    }
-    
-    if (gameState !== 'playing') {
-      console.warn('❌ Game state is not playing:', gameState);
-      return;
-    }
-    
-    if (choiceSentRef.current) {
-      console.warn('❌ Choice already sent');
-      return;
-    }
-    
-    if (playerChoice) {
-      console.warn('❌ Player choice already set:', playerChoice);
-      return;
-    }
-    
-    if (roundResult) {
-      console.warn('❌ Round result already set');
-      return;
-    }
-    
-    if (timeLeft <= 0) {
-      console.warn('❌ Time is up');
-      return;
-    }
-
-
-    console.log('⏹️ Stopping timer for manual choice');
-    timerActiveRef.current = false;
-    clearAllTimers();
-
-
-    console.log('✅ Making choice:', choice);
-    choiceSentRef.current = true;
-    setPlayerChoice(choice);
-    socketService.makeChoice(currentRoom.id, choice);
-    setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
-    
-
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
-    }
-    
-    playSound('choice');
-  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, playSound, clearAllTimers]);
-
   const startNewGame = useCallback(() => {
     if (currentRoom) {
       console.log('🎮 Starting new game');
-      clearAllTimers();
+      stopTimer();
       
       socketService.startNewGame(currentRoom.id);
       setGameState('playing');
       setMessage('🎮 New game started!');
       setRoundResult(null);
       setGameHistory([]);
-      
-      // Reset choice state
-      choiceSentRef.current = false;
       setPlayerChoice(null);
       setOpponentChoice(null);
       
@@ -493,11 +440,11 @@ export const useMultiplayerGame = () => {
         startNewRound();
       }, 1000);
     }
-  }, [currentRoom, startNewRound, clearAllTimers]);
+  }, [currentRoom, startNewRound, stopTimer]);
 
   const resetToMenu = useCallback(() => {
     console.log('🏠 Resetting to menu');
-    clearAllTimers();
+    stopTimer();
     
     setGameState('menu');
     setCurrentRoom(null);
@@ -508,16 +455,11 @@ export const useMultiplayerGame = () => {
     setMessage('');
     setPlayerChoice(null);
     setOpponentChoice(null);
-    setRoundStartTime(null);
     setBothPlayersReady(false);
     setTimeLeft(0);
     setConnectionError('');
     setGameHistory([]);
-    
-    // Reset refs
-    choiceSentRef.current = false;
-    timerActiveRef.current = false;
-  }, [clearAllTimers]);
+  }, [stopTimer]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -559,7 +501,7 @@ export const useMultiplayerGame = () => {
     isConnected,
     playerChoice,
     opponentChoice,
-    roundStartTime,
+    roundStartTime: timerStateRef.current.startTime,
     bothPlayersReady,
     isLoading,
     connectionError,
@@ -586,6 +528,7 @@ export const useMultiplayerGame = () => {
     getTimerColor
   };
 };
+
 // Loading Screen Component
 const LoadingScreen = () => (
   <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
