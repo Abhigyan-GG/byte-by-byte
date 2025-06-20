@@ -14,6 +14,7 @@ interface GameHistoryItem {
 export const useMultiplayerGame = () => {
   // Game State
   const choiceSentRef = useRef(false);
+  const timerActiveRef = useRef(false); 
   const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished' | 'connecting'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -41,8 +42,11 @@ export const useMultiplayerGame = () => {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const ROUND_DURATION = 10000;
 
-  // Clear all timers helper
+
   const clearAllTimers = useCallback(() => {
+    console.log('🧹 Clearing all timers');
+    timerActiveRef.current = false; 
+    
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -89,14 +93,14 @@ export const useMultiplayerGame = () => {
     }
   }, [soundEnabled]);
 
-  // Start new round - FIXED: Properly reset choice state
+
   const startNewRound = useCallback(() => {
     console.log('🎯 Starting new round - resetting choice state');
     
-    // Clear all timers first
+
     clearAllTimers();
     
-    // Reset all choice-related state
+
     choiceSentRef.current = false;
     setPlayerChoice(null);
     setOpponentChoice(null);
@@ -111,36 +115,70 @@ export const useMultiplayerGame = () => {
     console.log('✅ Choice state reset complete');
   }, [clearAllTimers]);
 
-  // Timer management - FIXED: Better cleanup and state checking
+
   useEffect(() => {
-    if (roundStartTime && gameState === 'playing' && !roundResult && !playerChoice) {
+    
+    if (roundStartTime && 
+        gameState === 'playing' && 
+        !roundResult && 
+        !playerChoice && 
+        !choiceSentRef.current) {
+      
       console.log('⏱️ Starting countdown timer');
+      timerActiveRef.current = true;
       
       const updateCountdown = () => {
+
+        if (!timerActiveRef.current || choiceSentRef.current) {
+          console.log('⏹️ Timer stopped - choice already made');
+          if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+          }
+          return;
+        }
+        
         const now = Date.now();
         const elapsed = now - roundStartTime;
         const remaining = Math.max(0, Math.ceil((ROUND_DURATION - elapsed) / 1000));
         
         setTimeLeft(remaining);
         
-        // Auto-submit random choice if time runs out and no choice made
-        if (remaining <= 0 && !choiceSentRef.current && !playerChoice && currentRoom) {
+
+        if (remaining <= 0 && 
+            !choiceSentRef.current && 
+            timerActiveRef.current && 
+            currentRoom) {
+          
           console.log('⏰ Time up! Auto-submitting random choice');
-          const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          
+
+          timerActiveRef.current = false;
           choiceSentRef.current = true;
+          
+          const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
           setPlayerChoice(randomChoice);
           socketService.makeChoice(currentRoom.id, randomChoice);
           setMessage('⏰ Time up! Random choice submitted...');
+          
+          // Clear the timer
+          if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+          }
         }
       };
 
-      // Initial update
+
       updateCountdown();
       
-      // Set up interval
+
       countdownRef.current = setInterval(updateCountdown, 100);
 
+
       return () => {
+        console.log('🧹 Cleaning up timer effect');
+        timerActiveRef.current = false;
         if (countdownRef.current) {
           clearInterval(countdownRef.current);
           countdownRef.current = null;
@@ -153,7 +191,7 @@ export const useMultiplayerGame = () => {
   const setupSocketListeners = useCallback(() => {
     console.log('🔧 Setting up socket listeners');
     
-    // Clear any existing listeners first
+
     socketService.removeAllListeners();
 
     socketService.onRoomCreated(({ roomCode, player }) => {
@@ -207,7 +245,7 @@ export const useMultiplayerGame = () => {
     socketService.onRoundResult((result) => {
       console.log('🎲 Round result received:', result);
       
-      // Clear all timers immediately
+
       clearAllTimers();
 
       setRoundResult(result);
@@ -222,7 +260,7 @@ export const useMultiplayerGame = () => {
       if (updatedCurrentPlayer) setCurrentPlayer(updatedCurrentPlayer);
       if (updatedOpponent) setOpponent(updatedOpponent);
 
-      // Update game history
+
       const roundData: GameHistoryItem = {
         round: result.round,
         playerChoice: result.playerChoices?.[0] || '',
@@ -232,7 +270,7 @@ export const useMultiplayerGame = () => {
       };
       setGameHistory(prev => [...prev, roundData]);
 
-      // Update player stats
+
       if (result.result === 'tie') {
         setPlayerStats(prev => ({ ...prev, ties: prev.ties + 1 }));
         playSound('tie');
@@ -248,7 +286,6 @@ export const useMultiplayerGame = () => {
         }
       }
 
-      // Enhanced result messages
       let resultMessage = '';
       if (result.result === 'tie') {
         resultMessage = "🤝 It's a tie! Great minds think alike!";
@@ -261,7 +298,7 @@ export const useMultiplayerGame = () => {
       }
       setMessage(resultMessage);
 
-      // Prepare for next round or finish game
+
       setTimeout(() => {
         console.log('🔄 Preparing for next round...');
         setRoundResult(null);
@@ -344,9 +381,9 @@ export const useMultiplayerGame = () => {
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, []);
+  }, [clearAllTimers]);
 
-  // Setup listeners when connected
+
   useEffect(() => {
     if (isConnected) {
       setupSocketListeners();
@@ -372,13 +409,14 @@ export const useMultiplayerGame = () => {
     }
   }, [roomCode, playerName]);
 
-  // FIXED: Make choice function with better state checking
+ 
   const makeChoice = useCallback((choice: string) => {
     console.log('🎯 Attempting to make choice:', choice);
     console.log('State check:', {
       hasRoom: !!currentRoom,
       gameState,
       choiceSent: choiceSentRef.current,
+      timerActive: timerActiveRef.current,
       hasPlayerChoice: !!playerChoice,
       hasRoundResult: !!roundResult,
       timeLeft
@@ -415,20 +453,25 @@ export const useMultiplayerGame = () => {
       return;
     }
 
-    // Make the choice
+
+    console.log('⏹️ Stopping timer for manual choice');
+    timerActiveRef.current = false;
+    clearAllTimers();
+
+
     console.log('✅ Making choice:', choice);
     choiceSentRef.current = true;
     setPlayerChoice(choice);
     socketService.makeChoice(currentRoom.id, choice);
     setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
     
-    // Haptic feedback
+
     if (navigator.vibrate) {
       navigator.vibrate(50);
     }
     
     playSound('choice');
-  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, playSound]);
+  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, playSound, clearAllTimers]);
 
   const startNewGame = useCallback(() => {
     if (currentRoom) {
@@ -471,8 +514,9 @@ export const useMultiplayerGame = () => {
     setConnectionError('');
     setGameHistory([]);
     
-    // Reset choice ref
+    // Reset refs
     choiceSentRef.current = false;
+    timerActiveRef.current = false;
   }, [clearAllTimers]);
 
   const copyRoomCode = () => {
@@ -542,7 +586,6 @@ export const useMultiplayerGame = () => {
     getTimerColor
   };
 };
-
 // Loading Screen Component
 const LoadingScreen = () => (
   <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
