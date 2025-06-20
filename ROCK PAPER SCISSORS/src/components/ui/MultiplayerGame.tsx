@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { socketService } from '../../utils/socketService';
 import type { GameRoom, MultiplayerPlayer as Player, RoundResult } from '../../types';
+
 // Game history interface
 interface GameHistoryItem {
   round: number;
@@ -71,6 +72,16 @@ export const useMultiplayerGame = () => {
     }
   }, [soundEnabled]);
 
+  // Start new round
+  const startNewRound = useCallback(() => {
+    setRoundStartTime(Date.now());
+    setPlayerChoice(null);
+    setOpponentChoice(null);
+    setBothPlayersReady(false);
+    setTimeLeft(10);
+    setMessage('🎯 Make your choice! You have 10 seconds...');
+  }, []);
+
   // Timer management
   useEffect(() => {
     if (roundStartTime && gameState === 'playing' && !roundResult) {
@@ -97,18 +108,11 @@ export const useMultiplayerGame = () => {
     }
   }, [roundStartTime, gameState, roundResult, playerChoice, currentRoom]);
 
-  // Start new round
-  const startNewRound = useCallback(() => {
-    setRoundStartTime(Date.now());
-    setPlayerChoice(null);
-    setOpponentChoice(null);
-    setBothPlayersReady(false);
-    setTimeLeft(10);
-    setMessage('🎯 Make your choice! You have 10 seconds...');
-  }, []);
-
-  // Socket listeners setup
+  // Socket listeners setup - Moved outside useEffect to prevent recreation
   const setupSocketListeners = useCallback(() => {
+    // Clear any existing listeners first
+    socketService.removeAllListeners();
+
     socketService.onRoomCreated(({ roomCode, player }) => {
       setRoomCode(roomCode);
       setCurrentPlayer(player);
@@ -252,21 +256,29 @@ export const useMultiplayerGame = () => {
       setMessage(`❌ Error: ${error}`);
       setConnectionError(error);
     });
-  }, [startNewRound, currentPlayer, opponent, currentRoom, playSound]);
+  }, [startNewRound, playSound]); // Removed currentPlayer, opponent, currentRoom from dependencies
 
-  // Connection management
+  // Connection management - Fixed useEffect dependencies
   useEffect(() => {
     const connectSocket = async () => {
       try {
         setIsLoading(true);
         setReconnecting(false);
+        setGameState('connecting');
+        
         await socketService.connect();
         setIsConnected(true);
         setConnectionError('');
+        setGameState('menu');
+        
+        // Setup listeners after successful connection
         setupSocketListeners();
+        
       } catch (error) {
         setConnectionError('Failed to connect to server. Attempting to reconnect...');
         setReconnecting(true);
+        setGameState('menu');
+        
         setTimeout(() => {
           if (!isConnected) connectSocket();
         }, 3000);
@@ -276,15 +288,27 @@ export const useMultiplayerGame = () => {
       }
     };
 
-    connectSocket();
+    // Only connect if we're not already connected
+    if (!isConnected) {
+      connectSocket();
+    }
 
+    // Cleanup function - only disconnect on component unmount, not on re-renders
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      // Only remove listeners and disconnect on actual unmount
       socketService.removeAllListeners();
       socketService.disconnect();
     };
-  }, [setupSocketListeners, isConnected]);
+  }, []); // Empty dependency array - only run once on mount
+
+  // Separate effect to setup listeners when connection state changes
+  useEffect(() => {
+    if (isConnected) {
+      setupSocketListeners();
+    }
+  }, [isConnected, setupSocketListeners]);
 
   // Game actions
   const createRoom = useCallback(() => {
