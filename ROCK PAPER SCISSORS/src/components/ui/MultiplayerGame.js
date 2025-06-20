@@ -408,3 +408,5 @@ export const useMultiplayerGame = () => {
     getTimerColor
   };
 };
+
+export default MultiplayerGame;
