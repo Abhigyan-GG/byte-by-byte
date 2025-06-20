@@ -239,8 +239,9 @@ export const useMultiplayerGame = () => {
     });
 
     socketService.onPlayerDisconnected(({ playerName }) => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
       
       setMessage(`📱 ${playerName} disconnected. Waiting for reconnection...`);
       setGameState('waiting');
