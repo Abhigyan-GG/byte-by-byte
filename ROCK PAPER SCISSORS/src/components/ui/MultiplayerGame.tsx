@@ -1,41 +1,49 @@
-// React components for multiplayer Rock Paper Scissors game
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { socketService } from '../../utils/socketService';
+import type { GameRoom, MultiplayerPlayer as Player, RoundResult } from '../../types';
+// Game history interface
+interface GameHistoryItem {
+  round: number;
+  playerChoice: string;
+  opponentChoice: string;
+  result: 'player1' | 'player2' | 'tie';
+  timestamp: string;
+}
 
 export const useMultiplayerGame = () => {
   // Game State
-  const [gameState, setGameState] = useState('menu');
+  const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished' | 'connecting'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [currentRoom, setCurrentRoom] = useState(null);
-  const [currentPlayer, setCurrentPlayer] = useState(null);
-  const [opponent, setOpponent] = useState(null);
-  const [roundResult, setRoundResult] = useState(null);
+  const [currentRoom, setCurrentRoom] = useState<GameRoom | null>(null);
+  const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
+  const [opponent, setOpponent] = useState<Player | null>(null);
+  const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
   const [message, setMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  const [playerChoice, setPlayerChoice] = useState(null);
-  const [opponentChoice, setOpponentChoice] = useState(null);
-  const [roundStartTime, setRoundStartTime] = useState(null);
+  const [playerChoice, setPlayerChoice] = useState<string | null>(null);
+  const [opponentChoice, setOpponentChoice] = useState<string | null>(null);
+  const [roundStartTime, setRoundStartTime] = useState<number | null>(null);
   const [bothPlayersReady, setBothPlayersReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [timeLeft, setTimeLeft] = useState(0);
-  const [gameHistory, setGameHistory] = useState([]);
+  const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [playerStats, setPlayerStats] = useState({ wins: 0, losses: 0, ties: 0 });
   const [reconnecting, setReconnecting] = useState(false);
 
   // Refs
-  const timerRef = useRef(null);
-  const countdownRef = useRef(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const ROUND_DURATION = 10000;
 
   // Sound effects
-  const playSound = useCallback((type) => {
+  const playSound = useCallback((type: string) => {
     if (!soundEnabled) return;
     
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     const audioContext = new AudioCtx();
 
     const oscillator = audioContext.createOscillator();
@@ -44,7 +52,7 @@ export const useMultiplayerGame = () => {
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    const sounds = {
+    const sounds: Record<string, { frequency: number; duration: number }> = {
       choice: { frequency: 800, duration: 0.1 },
       win: { frequency: 523, duration: 0.3 },
       lose: { frequency: 200, duration: 0.5 },
@@ -162,10 +170,10 @@ export const useMultiplayerGame = () => {
       if (updatedOpponent) setOpponent(updatedOpponent);
 
       // Update game history
-      const roundData = {
+      const roundData: GameHistoryItem = {
         round: result.round,
-        playerChoice: result.playerChoices?.[0],
-        opponentChoice: result.playerChoices?.[1],
+        playerChoice: result.playerChoices?.[0] || '',
+        opponentChoice: result.playerChoices?.[1] || '',
         result: result.result,
         timestamp: new Date().toLocaleTimeString()
       };
@@ -296,7 +304,7 @@ export const useMultiplayerGame = () => {
     }
   }, [roomCode, playerName]);
 
-  const makeChoice = useCallback((choice) => {
+  const makeChoice = useCallback((choice: string) => {
     if (currentRoom && gameState === 'playing' && !playerChoice && !roundResult && timeLeft > 0) {
       setPlayerChoice(choice);
       socketService.makeChoice(currentRoom.id, choice);
@@ -353,8 +361,8 @@ export const useMultiplayerGame = () => {
   const toggleSound = () => setSoundEnabled(!soundEnabled);
 
   // Utility functions
-  const getChoiceEmoji = (choice) => {
-    const emojiMap = {
+  const getChoiceEmoji = (choice: string) => {
+    const emojiMap: Record<string, string> = {
       rock: '🪨',
       paper: '📄',
       scissors: '✂️'
@@ -391,6 +399,7 @@ export const useMultiplayerGame = () => {
     gameHistory,
     soundEnabled,
     showSettings,
+    setShowSettings,
     playerStats,
     reconnecting,
     
@@ -409,10 +418,6 @@ export const useMultiplayerGame = () => {
     getTimerColor
   };
 };
-
-
-// React components for the multiplayer game UI
-
 
 // Loading Screen Component
 const LoadingScreen = () => (
@@ -724,40 +729,43 @@ const ChoiceSelection = ({
 );
 
 // Main Game Container Component
-const MultiplayerGame = ({
-  gameState,
-  connectionError,
-  reconnecting,
-  playerName,
-  setPlayerName,
-  roomCode,
-  setRoomCode,
-  createRoom,
-  joinRoom,
-  message,
-  copyRoomCode,
-  resetToMenu,
-  currentPlayer,
-  opponent,
-  currentRoom,
-  timeLeft,
-  getTimerColor,
-  roundResult,
-  getChoiceEmoji,
-  makeChoice,
-  playerChoice,
-  opponentChoice,
-  bothPlayersReady,
-  gameHistory,
-  showSettings,
-  setShowSettings,
-  startNewGame,
-  soundEnabled,
-  toggleSound,
-  toggleSettings,
-  playerStats
-}) = MultiplayerGame();
-   {
+const MultiplayerGame = () => {
+  const gameProps = useMultiplayerGame();
+  
+  const {
+    gameState,
+    connectionError,
+    reconnecting,
+    playerName,
+    setPlayerName,
+    roomCode,
+    setRoomCode,
+    createRoom,
+    joinRoom,
+    message,
+    copyRoomCode,
+    resetToMenu,
+    currentPlayer,
+    opponent,
+    currentRoom,
+    timeLeft,
+    getTimerColor,
+    roundResult,
+    getChoiceEmoji,
+    makeChoice,
+    playerChoice,
+    opponentChoice,
+    bothPlayersReady,
+    gameHistory,
+    showSettings,
+    setShowSettings,
+    startNewGame,
+    soundEnabled,
+    toggleSound,
+    toggleSettings,
+    playerStats
+  } = gameProps;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 to-blue-600 p-4 flex items-center justify-center">
       <div className="w-full max-w-4xl">
@@ -807,7 +815,7 @@ const MultiplayerGame = ({
           </div>
         )}
 
-        {gameState === 'ingame' && (
+        {gameState === 'playing' && (
           <div className="space-y-6">
             <GameHeader 
               soundEnabled={soundEnabled}
