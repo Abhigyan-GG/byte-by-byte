@@ -11,8 +11,10 @@ interface GameHistoryItem {
   timestamp: string;
 }
 
+
 export const useMultiplayerGame = () => {
   // Game State
+  const choiceSentRef = useRef(false);
   const [gameState, setGameState] = useState<'menu' | 'waiting' | 'playing' | 'finished' | 'connecting'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -89,12 +91,14 @@ export const useMultiplayerGame = () => {
         const remaining = Math.max(0, Math.ceil((roundStartTime + ROUND_DURATION - Date.now()) / 1000));
         setTimeLeft(remaining);
         
-        if (remaining <= 0 && !playerChoice && currentRoom) {
+        if (remaining <= 0 && !choiceSentRef.current && currentRoom) {
           const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          choiceSentRef.current = true;
           setPlayerChoice(randomChoice);
           socketService.makeChoice(currentRoom.id, randomChoice);
           setMessage('⏰ Time up! Random choice submitted...');
         }
+
       };
 
       updateCountdown();
@@ -217,6 +221,7 @@ export const useMultiplayerGame = () => {
         setRoundResult(null);
         setPlayerChoice(null);
         setOpponentChoice(null);
+        choiceSentRef.current = false;
         
         if (currentRoom && result.round < currentRoom.maxRounds) {
           startNewRound();
@@ -330,7 +335,8 @@ export const useMultiplayerGame = () => {
   }, [roomCode, playerName]);
 
   const makeChoice = useCallback((choice: string) => {
-    if (currentRoom && gameState === 'playing' && !playerChoice && !roundResult && timeLeft > 0) {
+    if (currentRoom && gameState === 'playing' && !choiceSentRef.current && !playerChoice && !roundResult && timeLeft > 0) {
+      choiceSentRef.current = true;
       setPlayerChoice(choice);
       socketService.makeChoice(currentRoom.id, choice);
       setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
