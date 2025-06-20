@@ -14,7 +14,7 @@ const io = new Server(server, {
 });
 
 const rooms = new Map();
-const ROUND_DURATION = 30000; // 30 seconds
+const ROUND_DURATION = 10000; // 10 seconds
 
 function createRoomCode() {
   return nanoid(6).toUpperCase();
@@ -41,26 +41,15 @@ function startRoundTimer(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  // Clear any existing timer
-  if (room.roundTimer) {
-    clearTimeout(room.roundTimer);
-  }
+  if (room.roundTimer) clearTimeout(room.roundTimer);
 
   room.roundTimer = setTimeout(() => {
-    const currentRoom = rooms.get(roomCode);
-    if (!currentRoom) return;
+    const [player1, player2] = room.players;
 
-    const [player1, player2] = currentRoom.players;
-    
-    // Auto-assign random choices for players who haven't chosen
-    if (!player1.choice) {
-      player1.choice = getRandomChoice();
-    }
-    if (!player2.choice) {
-      player2.choice = getRandomChoice();
-    }
+    if (!player1.choice) player1.choice = getRandomChoice();
+    if (!player2.choice) player2.choice = getRandomChoice();
 
-    // Process the round
+    console.log(`⏰ Time's up for room ${roomCode}. Auto-choices: ${player1.choice}, ${player2.choice}`);
     processRound(roomCode);
   }, ROUND_DURATION);
 }
@@ -69,15 +58,12 @@ function processRound(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  // Clear the timer
   if (room.roundTimer) {
     clearTimeout(room.roundTimer);
     room.roundTimer = null;
   }
 
   const [player1, player2] = room.players;
-  
-  // Ensure both players have choices
   if (!player1.choice || !player2.choice) return;
 
   const resultKey = getRoundWinner(player1.choice, player2.choice);
@@ -100,11 +86,9 @@ function processRound(roomCode) {
   io.to(roomCode).emit('roundResult', roundResult);
   io.to(roomCode).emit('roomUpdated', room);
 
-  // Reset choices for next round
   player1.choice = null;
   player2.choice = null;
 
-  // Check if game is finished
   if (room.round >= room.maxRounds) {
     let winner = null;
     if (player1.score > player2.score) winner = player1;
@@ -116,11 +100,21 @@ function processRound(roomCode) {
     };
 
     io.to(roomCode).emit('gameFinished', { winner, finalScores });
+    console.log(`🏁 Game finished in ${roomCode}. Winner: ${winner ? winner.name : 'Tie'}`);
+  } else {
+    setTimeout(() => {
+      startRoundTimer(roomCode);
+      io.to(roomCode).emit('roundStarted', {
+        startTime: Date.now(),
+        duration: ROUND_DURATION
+      });
+      console.log(`➡️ Starting next round in room ${roomCode}`);
+    }, 1000); // brief delay before next round
   }
 }
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Client connected: ${socket.id}`);
+  console.log(`🔌 Connected: ${socket.id}`);
 
   socket.on('createRoom', (playerName) => {
     const roomCode = createRoomCode();
@@ -141,15 +135,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', (roomCode, playerName) => {
-    console.log(`🧪 joinRoom received: roomCode = '${roomCode}', playerName = '${playerName}'`);
-    console.log("📦 Rooms available:", Array.from(rooms.keys()));
-    
     const room = rooms.get(roomCode);
-    if (!room) {    
-      console.log(`❌ Room '${roomCode}' not found`);
+    if (!room) {
       socket.emit('roomError', 'Room not found');
       return;
     }
+
     if (room.players.length >= 2) {
       socket.emit('error', 'Room is full');
       return;
@@ -159,48 +150,37 @@ io.on('connection', (socket) => {
     room.players.push(newPlayer);
     room.round = 0;
     room.currentRound = 0;
-    room.players.forEach(p => { p.choice = null; p.score = 0; });
+    room.players.forEach(p => {
+      p.choice = null;
+      p.score = 0;
+    });
 
     socket.join(roomCode);
     io.to(roomCode).emit('playerJoined', { room, newPlayer });
-    console.log(`👤 ${playerName} joined room ${roomCode}`);
+    console.log(`👥 ${playerName} joined room ${roomCode}`);
 
-    // Start the first round timer after a short delay
     setTimeout(() => {
       startRoundTimer(roomCode);
-      io.to(roomCode).emit('roundStarted', { 
-        startTime: Date.now(), 
-        duration: ROUND_DURATION 
+      io.to(roomCode).emit('roundStarted', {
+        startTime: Date.now(),
+        duration: ROUND_DURATION
       });
     }, 2000);
   });
 
   socket.on('makeChoice', (roomCode, choice) => {
     const room = rooms.get(roomCode);
-    if (!room) return;
-
-    if (!['rock', 'paper', 'scissors'].includes(choice)) {
-      socket.emit('error', 'Invalid choice');
-      return;
-    }
+    if (!room || !['rock', 'paper', 'scissors'].includes(choice)) return;
 
     const player = room.players.find(p => p.id === socket.id);
-    if (!player) return;
-
-    // Don't allow changing choice once made
-    if (player.choice) return;
+    if (!player || player.choice) return;
 
     player.choice = choice;
-    
-    // Notify other players that this player made a choice
     socket.to(roomCode).emit('playerMadeChoice', { playerName: player.name });
 
     const [player1, player2] = room.players;
-    
-    // Check if both players have made their choices
     if (player1.choice && player2.choice) {
-      console.log(`⚡ Both players ready in room ${roomCode} - processing immediately`);
-      // Both players ready - process round immediately
+      console.log(`⚔️ Both choices made in room ${roomCode}`);
       processRound(roomCode);
     }
   });
@@ -209,7 +189,6 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    // Clear any existing timer
     if (room.roundTimer) {
       clearTimeout(room.roundTimer);
       room.roundTimer = null;
@@ -223,37 +202,36 @@ io.on('connection', (socket) => {
     });
 
     io.to(roomCode).emit('roomUpdated', room);
-    console.log(`🔄 Game restarted in room ${roomCode}`);
+    console.log(`🔄 New game in room ${roomCode}`);
 
-    // Start the first round timer for the new game
     setTimeout(() => {
       startRoundTimer(roomCode);
-      io.to(roomCode).emit('roundStarted', { 
-        startTime: Date.now(), 
-        duration: ROUND_DURATION 
+      io.to(roomCode).emit('roundStarted', {
+        startTime: Date.now(),
+        duration: ROUND_DURATION
       });
     }, 1000);
   });
 
   socket.on('disconnect', () => {
-    console.log(`❌ Client disconnected: ${socket.id}`);
+    console.log(`❌ Disconnected: ${socket.id}`);
 
     for (const [roomCode, room] of rooms) {
-      const index = room.players.findIndex(p => p.id === socket.id);
-      if (index !== -1) {
-        const [removedPlayer] = room.players.splice(index, 1);
-        
-        // Clear room timer when player disconnects
+      const idx = room.players.findIndex(p => p.id === socket.id);
+      if (idx !== -1) {
+        const [removed] = room.players.splice(idx, 1);
+
         if (room.roundTimer) {
           clearTimeout(room.roundTimer);
           room.roundTimer = null;
         }
-        
-        socket.to(roomCode).emit('playerDisconnected', { playerName: removedPlayer.name });
+
+        socket.to(roomCode).emit('playerDisconnected', { playerName: removed.name });
+        console.log(`👤 Removed player ${removed.name} from room ${roomCode}`);
 
         if (room.players.length === 0) {
           rooms.delete(roomCode);
-          console.log(`🗑️ Deleted room ${roomCode}`);
+          console.log(`🗑️ Deleted empty room ${roomCode}`);
         }
         break;
       }
