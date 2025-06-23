@@ -48,7 +48,6 @@ export const useMultiplayerGame = () => {
     console.log('🛑 STOPPING TIMER - Current state:', timerStateRef.current);
     
     timerStateRef.current.isActive = false;
-    timerStateRef.current.choiceMade = true;
     
     if (timerStateRef.current.intervalId) {
       clearInterval(timerStateRef.current.intervalId);
@@ -59,11 +58,13 @@ export const useMultiplayerGame = () => {
   }, []);
 
   const startTimer = useCallback(() => {
+ 
     stopTimer();
     
     const roundId = Date.now(); 
     console.log('▶️ STARTING TIMER for round:', roundId);
     
+ 
     timerStateRef.current = {
       isActive: true,
       startTime: Date.now(),
@@ -77,6 +78,7 @@ export const useMultiplayerGame = () => {
     const updateTimer = () => {
       const state = timerStateRef.current;
 
+    
       if (!state.isActive || state.choiceMade || state.roundId !== roundId) {
         console.log('⏹️ Timer instance invalid, stopping:', {
           isActive: state.isActive,
@@ -96,14 +98,16 @@ export const useMultiplayerGame = () => {
       
       setTimeLeft(remaining);
 
+      // Auto-submit when time runs out
       if (remaining <= 0 && 
           state.isActive && 
           !state.choiceMade && 
           state.roundId === roundId &&
           currentRoom &&
-          gameState === 'playing') {
+          gameState === 'playing' &&
+          !playerChoice) { 
         
-        console.log('⏰ AUTO-SUBMITTING - Final checks passed');
+        console.log('⏰ AUTO-SUBMITTING - Time expired, no choice made');
 
         state.choiceMade = true;
         state.isActive = false;
@@ -123,9 +127,10 @@ export const useMultiplayerGame = () => {
     const intervalId = setInterval(updateTimer, 100);
     timerStateRef.current.intervalId = intervalId;
     
+    // Run initial update
     updateTimer();
     
-  }, [stopTimer, currentRoom, gameState]);
+  }, [stopTimer, currentRoom, gameState, playerChoice]);
 
   const playSound = useCallback((type: string) => {
     if (!soundEnabled) return;
@@ -163,55 +168,72 @@ export const useMultiplayerGame = () => {
   }, [soundEnabled]);
 
   const startNewRound = useCallback(() => {
-    console.log('🎯 Starting new round');
+    console.log('🎯 Starting new round - Resetting all state');
 
+
+    stopTimer();
+    
+ 
     setPlayerChoice(null);
     setOpponentChoice(null);
     setRoundResult(null);
     setBothPlayersReady(false);
     setMessage('🎯 Make your choice! You have 10 seconds...');
     
-    // Start the timer
-    startTimer();
+
+    timerStateRef.current.choiceMade = false;
     
-  }, [startTimer]);
 
-const makeChoice = useCallback((choice: string) => {
-  console.log('🎯 Making choice:', choice);
-  console.log('Timer state before choice:', timerStateRef.current);
-  
-  if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
-    console.warn('❌ Cannot make choice - invalid state');
-    return;
-  }
-  
-  if (timerStateRef.current.choiceMade) {
-    console.warn('❌ Choice already made this round');
-    return;
-  }
-  
-  if (timeLeft <= 0) {
-    console.warn('❌ Time is up');
-    return;
-  }
-  timerStateRef.current.choiceMade = true;
-  timerStateRef.current.isActive = false;
-  
-  console.log('🛑 Stopping timer for manual choice');
-  stopTimer();
+    setTimeout(() => {
+      startTimer();
+    }, 100); 
+    
+  }, [startTimer, stopTimer]);
 
-  setPlayerChoice(choice);
-  socketService.makeChoice(currentRoom.id, choice);
-  setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
+  const makeChoice = useCallback((choice: string) => {
+    console.log('🎯 Making choice:', choice, 'Current playerChoice:', playerChoice);
+    console.log('Timer state before choice:', timerStateRef.current);
+    
 
-  if (navigator.vibrate) navigator.vibrate(50);
-  playSound('choice');
-  
-  console.log('✅ Choice made successfully');
-}, [currentRoom, gameState, playerChoice, roundResult, timeLeft, stopTimer, playSound]);
-  
+    if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
+      console.warn('❌ Cannot make choice - invalid state:', {
+        hasRoom: !!currentRoom,
+        gameState,
+        hasPlayerChoice: !!playerChoice,
+        hasRoundResult: !!roundResult
+      });
+      return;
+    }
+    
+    if (timerStateRef.current.choiceMade) {
+      console.warn('❌ Choice already made this round');
+      return;
+    }
+    
+    if (timeLeft <= 0) {
+      console.warn('❌ Time is up');
+      return;
+    }
 
-const setupSocketListeners = useCallback(() => {
+
+    timerStateRef.current.choiceMade = true;
+    timerStateRef.current.isActive = false;
+    
+    console.log('🛑 Stopping timer for manual choice');
+    stopTimer();
+
+
+    setPlayerChoice(choice);
+    socketService.makeChoice(currentRoom.id, choice);
+    setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
+
+    if (navigator.vibrate) navigator.vibrate(50);
+    playSound('choice');
+    
+    console.log('✅ Choice made successfully');
+  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, stopTimer, playSound]);
+
+  const setupSocketListeners = useCallback(() => {
     console.log('🔧 Setting up socket listeners');
     
     socketService.removeAllListeners();
@@ -243,6 +265,7 @@ const setupSocketListeners = useCallback(() => {
       setGameState('playing');
       setMessage(`🎮 ${newPlayer.name} joined! Game starting...`);
       
+
       setTimeout(() => {
         startNewRound();
       }, 2000);
@@ -267,6 +290,7 @@ const setupSocketListeners = useCallback(() => {
     socketService.onRoundResult((result) => {
       console.log('🎲 Round result received:', result);
 
+    
       stopTimer();
 
       setRoundResult(result);
@@ -280,10 +304,19 @@ const setupSocketListeners = useCallback(() => {
       if (updatedCurrentPlayer) setCurrentPlayer(updatedCurrentPlayer);
       if (updatedOpponent) setOpponent(updatedOpponent);
 
+     
+      const playerChoiceResult = result.playerChoices[socketId || ''] || '';
+      const opponentChoiceResult = Object.keys(result.playerChoices).find(id => id !== socketId);
+      const opponentChoiceStr = opponentChoiceResult ? result.playerChoices[opponentChoiceResult] : '';
+
+
+      setPlayerChoice(playerChoiceResult);
+      setOpponentChoice(opponentChoiceStr);
+
       const roundData: GameHistoryItem = {
         round: result.round,
-        playerChoice: result.playerChoices?.[0] || '',
-        opponentChoice: result.playerChoices?.[1] || '',
+        playerChoice: playerChoiceResult,
+        opponentChoice: opponentChoiceStr,
         result: result.result,
         timestamp: new Date().toLocaleTimeString()
       };
@@ -316,11 +349,12 @@ const setupSocketListeners = useCallback(() => {
       }
       setMessage(resultMessage);
 
+
       setTimeout(() => {
-        console.log('🔄 Preparing for next round...');
-        setRoundResult(null);
+        console.log('🔄 Checking if game should continue...');
         
         if (currentRoom && result.round < currentRoom.maxRounds) {
+          console.log('🔄 Starting next round...');
           startNewRound();
         }
       }, 3000);
@@ -439,6 +473,9 @@ const setupSocketListeners = useCallback(() => {
       setPlayerChoice(null);
       setOpponentChoice(null);
       
+    
+      timerStateRef.current.choiceMade = false;
+      
       setTimeout(() => {
         startNewRound();
       }, 1000);
@@ -462,6 +499,8 @@ const setupSocketListeners = useCallback(() => {
     setTimeLeft(0);
     setConnectionError('');
     setGameHistory([]);
+
+    timerStateRef.current.choiceMade = false;
   }, [stopTimer]);
 
   const copyRoomCode = () => {

@@ -44,11 +44,15 @@ function startRoundTimer(roomCode) {
   if (!room) return;
 
   room.roundResolved = false; // ✅ Reset resolution flag
+  
+  // ✅ Reset choices at the START of each round
+  room.players.forEach(p => p.choice = null);
 
   clearTimeout(room.roundTimer);
   room.roundTimer = setTimeout(() => {
     const [p1, p2] = room.players;
 
+    // Only assign random choices if players haven't made a choice during this round
     if (!p1.choice) p1.choice = getRandomChoice();
     if (!p2.choice) p2.choice = getRandomChoice();
 
@@ -93,9 +97,7 @@ function processRound(roomCode) {
   io.to(roomCode).emit('roundResult', resultPayload);
   io.to(roomCode).emit('roomUpdated', room);
 
-  // Reset choices for next round
-  p1.choice = null;
-  p2.choice = null;
+  // ✅ DON'T reset choices here - they'll be reset when the next round starts
 
   // Final round check
   if (room.round >= room.maxRounds) {
@@ -188,11 +190,12 @@ io.on('connection', socket => {
     if (!player || player.choice) return;
 
     player.choice = choice;
+    console.log(`✅ Player ${player.name} chose ${choice} in room ${roomCode}`); // ✅ Add logging
     socket.to(roomCode).emit('playerMadeChoice', { playerName: player.name });
 
     const [p1, p2] = room.players;
     if (p1.choice && p2.choice) {
-      console.log(`⚔️ Both choices made in ${roomCode}`);
+      console.log(`⚔️ Both choices made in ${roomCode}: ${p1.choice} vs ${p2.choice}`);
       processRound(roomCode);
     }
   });
