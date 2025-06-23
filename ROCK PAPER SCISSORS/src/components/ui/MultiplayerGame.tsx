@@ -176,39 +176,42 @@ export const useMultiplayerGame = () => {
     
   }, [startTimer]);
 
-  const makeChoice = useCallback((choice: string) => {
-    console.log('🎯 Making choice:', choice);
-    console.log('Timer state before choice:', timerStateRef.current);
-    
-    if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
-      console.warn('❌ Cannot make choice - invalid state');
-      return;
-    }
-    
-    if (timerStateRef.current.choiceMade) {
-      console.warn('❌ Choice already made this round');
-      return;
-    }
-    
-    if (timeLeft <= 0) {
-      console.warn('❌ Time is up');
-      return;
-    }
+const makeChoice = useCallback((choice: string) => {
+  console.log('🎯 Making choice:', choice);
+  console.log('Timer state before choice:', timerStateRef.current);
+  
+  if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
+    console.warn('❌ Cannot make choice - invalid state');
+    return;
+  }
+  
+  if (timerStateRef.current.choiceMade) {
+    console.warn('❌ Choice already made this round');
+    return;
+  }
+  
+  if (timeLeft <= 0) {
+    console.warn('❌ Time is up');
+    return;
+  }
+  timerStateRef.current.choiceMade = true;
+  timerStateRef.current.isActive = false;
+  
+  console.log('🛑 Stopping timer for manual choice');
+  stopTimer();
 
-    console.log('🛑 Stopping timer for manual choice');
-    stopTimer();
+  setPlayerChoice(choice);
+  socketService.makeChoice(currentRoom.id, choice);
+  setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
 
-    setPlayerChoice(choice);
-    socketService.makeChoice(currentRoom.id, choice);
-    setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
+  if (navigator.vibrate) navigator.vibrate(50);
+  playSound('choice');
+  
+  console.log('✅ Choice made successfully');
+}, [currentRoom, gameState, playerChoice, roundResult, timeLeft, stopTimer, playSound]);
+  
 
-    if (navigator.vibrate) navigator.vibrate(50);
-    playSound('choice');
-    
-    console.log('✅ Choice made successfully');
-  }, [currentRoom, gameState, playerChoice, roundResult, timeLeft, stopTimer, playSound]);
-
-  const setupSocketListeners = useCallback(() => {
+const setupSocketListeners = useCallback(() => {
     console.log('🔧 Setting up socket listeners');
     
     socketService.removeAllListeners();
