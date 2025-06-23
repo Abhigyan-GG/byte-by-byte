@@ -114,7 +114,7 @@ export const useMultiplayerGame = () => {
         
         const randomChoice = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
         setPlayerChoice(randomChoice);
-        socketService.makeChoice(currentRoom.id, randomChoice);
+        socketService.makeChoice({ roomCode: currentRoom.id, choice: randomChoice });
         setMessage('⏰ Time up! Random choice submitted...');
 
         if (state.intervalId) {
@@ -224,7 +224,7 @@ export const useMultiplayerGame = () => {
 
 
     setPlayerChoice(choice);
-    socketService.makeChoice(currentRoom.id, choice);
+    socketService.makeChoice({ roomCode: currentRoom.id, choice });
     setMessage(`✅ Choice submitted: ${choice}! Waiting for opponent...`);
 
     if (navigator.vibrate) navigator.vibrate(50);

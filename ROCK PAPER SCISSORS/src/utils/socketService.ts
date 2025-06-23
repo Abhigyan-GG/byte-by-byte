@@ -1,24 +1,28 @@
 // src/utils/socketService.ts
-import { io, Socket } from 'socket.io-client';
-import type { Socket as SocketType } from 'socket.io-client';
+
+import { io } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { MultiplayerPlayer, GameRoom, RoundResult } from '../types';
 
 class SocketService {
   private socket: Socket | null = null;
+
   private serverUrl =
     process.env.NODE_ENV === 'production'
-      ? 'https://rps-backend-byxk.onrender.com' 
+      ? 'https://rps-backend-byxk.onrender.com'
       : 'http://localhost:3001';
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.socket = io(this.serverUrl);
+
       this.socket.on('connect', () => {
-        console.log('Connected to server');
+        console.log('🟢 Connected to server');
         resolve();
       });
+
       this.socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
+        console.error('❌ Connection error:', error);
         reject(error);
       });
     });
@@ -36,15 +40,15 @@ class SocketService {
   }
 
   joinRoom(roomCode: string, playerName: string) {
-    this.socket.emit('joinRoom', roomCode, playerName);
+    this.socket?.emit('joinRoom', roomCode, playerName);
   }
 
-  makeChoice(roomCode: string, choice: string) {
-    this.socket?.emit('makeChoice', { roomCode, choice });
-  }
+makeChoice({ roomCode, choice }: { roomCode: string; choice: string }) {
+  this.socket?.emit('makeChoice', { roomCode, choice });
+}
 
   startNewGame(roomCode: string) {
-    this.socket?.emit('newGame', roomCode);
+    this.socket?.emit('startNewGame', roomCode);
   }
 
   onRoomCreated(callback: (data: { roomCode: string; player: MultiplayerPlayer }) => void) {
@@ -56,8 +60,8 @@ class SocketService {
   }
 
   onRoundStarted(callback: () => void) {
-  this.socket?.on('roundStarted', callback);
-}
+    this.socket?.on('roundStarted', callback);
+  }
 
   onPlayerMadeChoice(callback: (data: { playerName: string }) => void) {
     this.socket?.on('playerMadeChoice', callback);
@@ -75,7 +79,7 @@ class SocketService {
     this.socket?.on('gameReset', callback);
   }
 
-  onPlayerDisconnected(callback: (data: { playerName: string; room: GameRoom }) => void) {
+  onPlayerDisconnected(callback: (data: { playerName: string }) => void) {
     this.socket?.on('playerDisconnected', callback);
   }
 
@@ -83,13 +87,13 @@ class SocketService {
     this.socket?.on('error', callback);
   }
 
+  onRoomUpdated(callback: (room: GameRoom) => void) {
+    this.socket?.on('roomUpdated', callback);
+  }
+
   removeAllListeners() {
     this.socket?.removeAllListeners();
   }
-
-  onRoomUpdated(callback: (room: GameRoom) => void) {
-  this.socket?.on('roomUpdated', callback);
-}
 
   get socketInstance() {
     return this.socket;

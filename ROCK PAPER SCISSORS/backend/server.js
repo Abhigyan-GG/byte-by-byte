@@ -182,23 +182,25 @@ io.on('connection', socket => {
     }, 2000);
   });
 
-  socket.on('makeChoice', (roomCode, choice) => {
-    const room = rooms.get(roomCode);
-    if (!room || !['rock', 'paper', 'scissors'].includes(choice) || room.roundResolved) return;
+socket.on('makeChoice', (payload) => {
+  const { roomCode, choice } = payload;
+  const room = rooms.get(roomCode);
+  if (!room || !['rock', 'paper', 'scissors'].includes(choice) || room.roundResolved) return;
 
-    const player = room.players.find(p => p.id === socket.id);
-    if (!player || player.choice) return;
+  const player = room.players.find(p => p.id === socket.id);
+  if (!player || player.choice) return;
 
-    player.choice = choice;
-    console.log(`✅ Player ${player.name} chose ${choice} in room ${roomCode}`); // ✅ Add logging
-    socket.to(roomCode).emit('playerMadeChoice', { playerName: player.name });
+  player.choice = choice;
+  console.log(`✅ Player ${player.name} chose ${choice} in room ${roomCode}`);
+  socket.to(roomCode).emit('playerMadeChoice', { playerName: player.name });
 
-    const [p1, p2] = room.players;
-    if (p1.choice && p2.choice) {
-      console.log(`⚔️ Both choices made in ${roomCode}: ${p1.choice} vs ${p2.choice}`);
-      processRound(roomCode);
-    }
-  });
+  const [p1, p2] = room.players;
+  if (p1.choice && p2.choice) {
+    console.log(`⚔️ Both choices made in ${roomCode}: ${p1.choice} vs ${p2.choice}`);
+    processRound(roomCode);
+  }
+});
+
 
   socket.on('startNewGame', roomCode => {
     const room = rooms.get(roomCode);
