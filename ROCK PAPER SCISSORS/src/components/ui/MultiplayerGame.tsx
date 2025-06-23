@@ -43,6 +43,7 @@ export const useMultiplayerGame = () => {
   });
 
   const ROUND_DURATION = 10000;
+  const RESULT_DISPLAY_DELAY = 5000; // 5 seconds to view the result
 
   const stopTimer = useCallback(() => {
     console.log('🛑 STOPPING TIMER - Current state:', timerStateRef.current);
@@ -170,20 +171,16 @@ export const useMultiplayerGame = () => {
   const startNewRound = useCallback(() => {
     console.log('🎯 Starting new round - Resetting all state');
 
-
     stopTimer();
     
- 
     setPlayerChoice(null);
     setOpponentChoice(null);
     setRoundResult(null);
     setBothPlayersReady(false);
     setMessage('🎯 Make your choice! You have 10 seconds...');
     
-
     timerStateRef.current.choiceMade = false;
     
-
     setTimeout(() => {
       startTimer();
     }, 100); 
@@ -194,7 +191,6 @@ export const useMultiplayerGame = () => {
     console.log('🎯 Making choice:', choice, 'Current playerChoice:', playerChoice);
     console.log('Timer state before choice:', timerStateRef.current);
     
-
     if (!currentRoom || gameState !== 'playing' || playerChoice || roundResult) {
       console.warn('❌ Cannot make choice - invalid state:', {
         hasRoom: !!currentRoom,
@@ -215,13 +211,11 @@ export const useMultiplayerGame = () => {
       return;
     }
 
-
     timerStateRef.current.choiceMade = true;
     timerStateRef.current.isActive = false;
     
     console.log('🛑 Stopping timer for manual choice');
     stopTimer();
-
 
     setPlayerChoice(choice);
     socketService.makeChoice({ roomCode: currentRoom.id, choice });
@@ -265,7 +259,6 @@ export const useMultiplayerGame = () => {
       setGameState('playing');
       setMessage(`🎮 ${newPlayer.name} joined! Game starting...`);
       
-
       setTimeout(() => {
         startNewRound();
       }, 2000);
@@ -290,7 +283,6 @@ export const useMultiplayerGame = () => {
     socketService.onRoundResult((result) => {
       console.log('🎲 Round result received:', result);
 
-    
       stopTimer();
 
       setRoundResult(result);
@@ -304,11 +296,9 @@ export const useMultiplayerGame = () => {
       if (updatedCurrentPlayer) setCurrentPlayer(updatedCurrentPlayer);
       if (updatedOpponent) setOpponent(updatedOpponent);
 
-     
       const playerChoiceResult = result.playerChoices[socketId || ''] || '';
       const opponentChoiceResult = Object.keys(result.playerChoices).find(id => id !== socketId);
       const opponentChoiceStr = opponentChoiceResult ? result.playerChoices[opponentChoiceResult] : '';
-
 
       setPlayerChoice(playerChoiceResult);
       setOpponentChoice(opponentChoiceStr);
@@ -349,7 +339,7 @@ export const useMultiplayerGame = () => {
       }
       setMessage(resultMessage);
 
-
+      // Increased delay to allow players to see the result properly
       setTimeout(() => {
         console.log('🔄 Checking if game should continue...');
         
@@ -357,7 +347,7 @@ export const useMultiplayerGame = () => {
           console.log('🔄 Starting next round...');
           startNewRound();
         }
-      }, 3000);
+      }, RESULT_DISPLAY_DELAY);
     });
 
     socketService.onGameFinished(({ winner }) => {
@@ -473,7 +463,6 @@ export const useMultiplayerGame = () => {
       setPlayerChoice(null);
       setOpponentChoice(null);
       
-    
       timerStateRef.current.choiceMade = false;
       
       setTimeout(() => {
@@ -570,6 +559,7 @@ export const useMultiplayerGame = () => {
     getTimerColor
   };
 };
+
 
 // Loading Screen Component
 const LoadingScreen = () => (
@@ -794,29 +784,40 @@ const ScoreDisplay = ({ currentPlayer, opponent, currentRoom, timeLeft, getTimer
 );
 
 // Round Result Component
-const RoundResult = ({ roundResult, currentPlayer, opponent, message, getChoiceEmoji }) => (
-  <div className="text-center">
-    <h3 className="text-2xl font-bold mb-6 text-gray-800">🎲 Round Result</h3>
-    <div className="flex justify-center items-center space-x-8 mb-6">
-      <div className="text-center">
-        <div className="text-sm text-gray-600 mb-2">{currentPlayer?.name}</div>
-        <div className="text-6xl animate-bounce">
-          {getChoiceEmoji(roundResult.playerChoices?.[0] || 'rock')}
+const RoundResult = ({ roundResult, currentPlayer, opponent, message, getChoiceEmoji }) => {
+  if (!roundResult || !currentPlayer || !opponent) return null;
+
+  const currentPlayerId = currentPlayer.id;
+  const opponentId = opponent.id;
+
+  const currentPlayerChoice = roundResult.playerChoices?.[currentPlayerId] ?? 'rock';
+  const opponentChoice = roundResult.playerChoices?.[opponentId] ?? 'rock';
+
+  return (
+    <div className="text-center">
+      <h3 className="text-2xl font-bold mb-6 text-gray-800">🎲 Round Result</h3>
+      <div className="flex justify-center items-center space-x-8 mb-6">
+        <div className="text-center">
+          <div className="text-sm text-gray-600 mb-2">{currentPlayer.name}</div>
+          <div className="text-6xl animate-bounce">
+            {getChoiceEmoji(currentPlayerChoice)}
+          </div>
+        </div>
+        <div className="text-4xl animate-pulse">⚡</div>
+        <div className="text-center">
+          <div className="text-sm text-gray-600 mb-2">{opponent.name}</div>
+          <div className="text-6xl animate-bounce" style={{ animationDelay: '0.1s' }}>
+            {getChoiceEmoji(opponentChoice)}
+          </div>
         </div>
       </div>
-      <div className="text-4xl animate-pulse">⚡</div>
-      <div className="text-center">
-        <div className="text-sm text-gray-600 mb-2">{opponent?.name}</div>
-        <div className="text-6xl animate-bounce" style={{animationDelay: '0.1s'}}>
-          {getChoiceEmoji(roundResult.playerChoices?.[1] || 'rock')}
-        </div>
+      <div className="text-xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+        {message}
       </div>
     </div>
-    <div className="text-xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-      {message}
-    </div>
-  </div>
-);
+  );
+};
+
 
 // Choice Selection Component
 const ChoiceSelection = ({ 
