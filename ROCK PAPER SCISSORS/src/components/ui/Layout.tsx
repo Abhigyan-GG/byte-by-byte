@@ -1,20 +1,21 @@
-import React, { ReactNode } from 'react';
+// src/components/ui/Layout.tsx
+import React from 'react';
 
-const Layout = ({ children }: { children: ReactNode }) => {
+const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-purple-500 to-blue-500">
-      <main className="flex-grow flex items-center justify-center">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-purple-500 to-blue-400 text-white">
+      <main className="flex-grow flex items-center justify-center p-4">
         {children}
       </main>
-      <footer className="text-center text-white p-4 bg-white/10">
+      <footer className="text-sm text-white text-center py-2 bg-black/20">
         Made with{' '}
         <a
-          href="https://github.com/your-username"
+          href="https://github.com/YOUR_GITHUB_USERNAME"
           target="_blank"
           rel="noopener noreferrer"
-          className="underline"
+          className="underline hover:text-pink-300 transition"
         >
-          &lt;3
+          {'<3'}
         </a>
       </footer>
     </div>
