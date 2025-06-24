@@ -12,7 +12,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <footer className="text-sm text-white text-center py-4 px-4 bg-black/20 backdrop-blur-sm">
         Made with{' '}
         <a
-          href="https://github.com/YOUR_GITHUB_USERNAME"
+          href="https://github.com/Abhigyan-GG"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-pink-300 transition-colors duration-200"
