@@ -1,10 +1,10 @@
-// src/pages/Index.tsx
 import React, { useState } from 'react';
 import ModeSelector from '../components/ui/ModeSelector';
 import GameScreen from '../components/ui/GameScreen';
 import GameResult from '../components/ui/GameResult';
 import MultiplayerGame from '../components/ui/MultiplayerGame';
 import { GameMode, Screen, Choice, ChoiceId, GameResult as GameResultType, GameScore } from '../types';
+import Layout from '../components/ui/Layout'; // ✅ Layout import
 
 // Game logic
 export const choices: Choice[] = [
@@ -48,18 +48,18 @@ const Index = () => {
       setPlayerChoice(choice);
       const compChoice = getComputerChoice();
       setComputerChoice(compChoice);
-      
+
       setIsRevealing(true);
       setTimeout(() => {
         const winner = determineWinner(choice, compChoice);
         setResult(winner);
-        
+
         if (winner === 'player1') {
           setScore(prev => ({ ...prev, player1: prev.player1 + 1 }));
         } else if (winner === 'player2') {
           setScore(prev => ({ ...prev, computer: prev.computer + 1 }));
         }
-        
+
         setCurrentScreen('result');
         setIsRevealing(false);
       }, 1500);
@@ -70,18 +70,18 @@ const Index = () => {
         setCurrentPlayer(2);
       } else {
         setPlayer2Choice(choice);
-        
+
         setIsRevealing(true);
         setTimeout(() => {
           const winner = determineWinner(playerChoice!, choice);
           setResult(winner);
-          
+
           if (winner === 'player1') {
             setScore(prev => ({ ...prev, player1: prev.player1 + 1 }));
           } else if (winner === 'player2') {
             setScore(prev => ({ ...prev, player2: prev.player2 + 1 }));
           }
-          
+
           setCurrentScreen('result');
           setIsRevealing(false);
         }, 1500);
@@ -111,41 +111,53 @@ const Index = () => {
     setRoundNumber(1);
   };
 
-  // Render different screens based on current state
+  // Wrapped returns inside Layout
   if (currentScreen === 'modeSelect') {
-    return <ModeSelector onModeSelect={handleModeSelect} />;
+    return (
+      <Layout>
+        <ModeSelector onModeSelect={handleModeSelect} />
+      </Layout>
+    );
   }
 
   if (currentScreen === 'multiplayer') {
-    return <MultiplayerGame />;
+    return (
+      <Layout>
+        <MultiplayerGame />
+      </Layout>
+    );
   }
 
   if (currentScreen === 'game') {
     return (
-      <GameScreen
-        gameMode={gameMode}
-        currentPlayer={currentPlayer}
-        score={score}
-        roundNumber={roundNumber}
-        isRevealing={isRevealing}
-        onChoice={handleChoice}
-        onBackToModeSelection={resetAll}
-      />
+      <Layout>
+        <GameScreen
+          gameMode={gameMode}
+          currentPlayer={currentPlayer}
+          score={score}
+          roundNumber={roundNumber}
+          isRevealing={isRevealing}
+          onChoice={handleChoice}
+          onBackToModeSelection={resetAll}
+        />
+      </Layout>
     );
   }
 
   if (currentScreen === 'result') {
     return (
-      <GameResult
-        gameMode={gameMode}
-        result={result}
-        playerChoice={playerChoice}
-        player2Choice={player2Choice}
-        computerChoice={computerChoice}
-        score={score}
-        onPlayAgain={resetGame}
-        onNewGame={resetAll}
-      />
+      <Layout>
+        <GameResult
+          gameMode={gameMode}
+          result={result}
+          playerChoice={playerChoice}
+          player2Choice={player2Choice}
+          computerChoice={computerChoice}
+          score={score}
+          onPlayAgain={resetGame}
+          onNewGame={resetAll}
+        />
+      </Layout>
     );
   }
 
