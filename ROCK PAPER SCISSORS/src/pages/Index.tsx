@@ -4,9 +4,8 @@ import GameScreen from '../components/ui/GameScreen';
 import GameResult from '../components/ui/GameResult';
 import MultiplayerGame from '../components/ui/MultiplayerGame';
 import { GameMode, Screen, Choice, ChoiceId, GameResult as GameResultType, GameScore } from '../types';
-import Layout from '../components/ui/Layout'; // ✅ Layout import
+import Layout from '../components/ui/Layout';
 
-// Game logic
 export const choices: Choice[] = [
   { id: 'rock', name: 'Rock', emoji: '🪨', beats: 'scissors' },
   { id: 'paper', name: 'Paper', emoji: '📄', beats: 'rock' },
@@ -36,11 +35,7 @@ const Index = () => {
 
   const handleModeSelect = (mode: GameMode) => {
     setGameMode(mode);
-    if (mode === 'multiplayer') {
-      setCurrentScreen('multiplayer');
-    } else {
-      setCurrentScreen('game');
-    }
+    setCurrentScreen(mode === 'multiplayer' ? 'multiplayer' : 'game');
   };
 
   const handleChoice = (choice: Choice) => {
@@ -53,18 +48,15 @@ const Index = () => {
       setTimeout(() => {
         const winner = determineWinner(choice, compChoice);
         setResult(winner);
-
         if (winner === 'player1') {
           setScore(prev => ({ ...prev, player1: prev.player1 + 1 }));
         } else if (winner === 'player2') {
           setScore(prev => ({ ...prev, computer: prev.computer + 1 }));
         }
-
         setCurrentScreen('result');
         setIsRevealing(false);
       }, 1500);
     } else {
-      // Two player mode
       if (currentPlayer === 1) {
         setPlayerChoice(choice);
         setCurrentPlayer(2);
@@ -75,13 +67,11 @@ const Index = () => {
         setTimeout(() => {
           const winner = determineWinner(playerChoice!, choice);
           setResult(winner);
-
           if (winner === 'player1') {
             setScore(prev => ({ ...prev, player1: prev.player1 + 1 }));
           } else if (winner === 'player2') {
             setScore(prev => ({ ...prev, player2: prev.player2 + 1 }));
           }
-
           setCurrentScreen('result');
           setIsRevealing(false);
         }, 1500);
@@ -111,26 +101,17 @@ const Index = () => {
     setRoundNumber(1);
   };
 
-  // Wrapped returns inside Layout
-  if (currentScreen === 'modeSelect') {
-    return (
-      <Layout>
-        <ModeSelector onModeSelect={handleModeSelect} />
-      </Layout>
-    );
-  }
+  let content;
 
-  if (currentScreen === 'multiplayer') {
-    return (
-      <Layout>
-        <MultiplayerGame />
-      </Layout>
-    );
-  }
-
-  if (currentScreen === 'game') {
-    return (
-      <Layout>
+  switch (currentScreen) {
+    case 'modeSelect':
+      content = <ModeSelector onModeSelect={handleModeSelect} />;
+      break;
+    case 'multiplayer':
+      content = <MultiplayerGame />;
+      break;
+    case 'game':
+      content = (
         <GameScreen
           gameMode={gameMode}
           currentPlayer={currentPlayer}
@@ -140,13 +121,10 @@ const Index = () => {
           onChoice={handleChoice}
           onBackToModeSelection={resetAll}
         />
-      </Layout>
-    );
-  }
-
-  if (currentScreen === 'result') {
-    return (
-      <Layout>
+      );
+      break;
+    case 'result':
+      content = (
         <GameResult
           gameMode={gameMode}
           result={result}
@@ -157,11 +135,13 @@ const Index = () => {
           onPlayAgain={resetGame}
           onNewGame={resetAll}
         />
-      </Layout>
-    );
+      );
+      break;
+    default:
+      content = null;
   }
 
-  return null;
+  return <Layout>{content}</Layout>;
 };
 
 export default Index;
