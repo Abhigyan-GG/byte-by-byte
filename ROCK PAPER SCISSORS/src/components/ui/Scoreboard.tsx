@@ -1,4 +1,4 @@
-// src/components/ui/Scoreboard.tsx
+
 import React from 'react';
 import { GameMode, GameScore } from '../../types';
 

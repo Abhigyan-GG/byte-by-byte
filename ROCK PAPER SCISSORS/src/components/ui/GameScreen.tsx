@@ -1,4 +1,3 @@
-// src/components/ui/GameScreen.tsx
 import React from 'react';
 import { GameMode, GameScore, Choice } from '../../types';
 import { choices } from '../../utils/gameLogic';

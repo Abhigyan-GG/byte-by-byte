@@ -1,4 +1,3 @@
-// src/utils/gameLogic.ts
 import { Choice, ChoiceId, GameResult } from '../types';
 
 export const choices: Choice[] = [

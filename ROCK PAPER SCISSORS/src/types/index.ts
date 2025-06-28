@@ -1,4 +1,4 @@
-// src/types/index.ts
+
 export type GameMode = 'computer' | 'twoPlayer' | 'multiplayer' | null;
 export type Screen = 'modeSelect' | 'game' | 'result' | 'multiplayer';
 export type ChoiceId = 'rock' | 'paper' | 'scissors';
@@ -39,6 +39,6 @@ export interface RoundResult {
   result: 'player1' | 'player2' | 'tie';
   players: MultiplayerPlayer[];
   playerChoices: {
-    [playerId: string]: string; // 'rock', 'paper', or 'scissors'
+    [playerId: string]: string;
   };
 }

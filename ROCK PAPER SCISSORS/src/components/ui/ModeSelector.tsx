@@ -1,4 +1,3 @@
-// src/components/ui/ModeSelector.tsx
 import React from 'react';
 import { GameMode } from '../../types';
 

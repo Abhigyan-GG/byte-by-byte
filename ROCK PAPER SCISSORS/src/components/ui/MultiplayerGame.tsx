@@ -43,7 +43,7 @@ export const useMultiplayerGame = () => {
   });
 
   const ROUND_DURATION = 10000;
-  const RESULT_DISPLAY_DELAY = 5000; // 5 seconds to view the result
+  const RESULT_DISPLAY_DELAY = 5000;
 
   const stopTimer = useCallback(() => {
     console.log('🛑 STOPPING TIMER - Current state:', timerStateRef.current);
@@ -127,8 +127,6 @@ export const useMultiplayerGame = () => {
 
     const intervalId = setInterval(updateTimer, 100);
     timerStateRef.current.intervalId = intervalId;
-    
-    // Run initial update
     updateTimer();
     
   }, [stopTimer, currentRoom, gameState, playerChoice]);
@@ -338,8 +336,6 @@ export const useMultiplayerGame = () => {
           : `😅 ${winner.name} wins this round! Better luck next time!`;
       }
       setMessage(resultMessage);
-
-      // Increased delay to allow players to see the result properly
       setTimeout(() => {
         console.log('🔄 Checking if game should continue...');
         

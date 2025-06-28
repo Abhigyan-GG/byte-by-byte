@@ -1,4 +1,3 @@
-// src/components/ui/GameResult.tsx
 import React from 'react';
 import { GameMode, GameScore, Choice, GameResult as GameResultType } from '../../types';
 import Scoreboard from './Scoreboard';

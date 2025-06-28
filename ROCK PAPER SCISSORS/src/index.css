@@ -2,14 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: Custom styles */
+
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 47.4% 11.2%;
   --primary: 240 100% 60%;
   --primary-foreground: 0 0% 100%;
   --radius: 0.5rem;
-  /* add more if needed */
+  
 }
 
 .dark {

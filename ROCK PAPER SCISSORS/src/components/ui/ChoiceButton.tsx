@@ -1,4 +1,3 @@
-// src/components/ui/ChoiceButton.tsx
 import React from 'react';
 import { Choice } from '../../types';
 

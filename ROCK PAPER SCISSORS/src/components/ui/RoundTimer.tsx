@@ -20,8 +20,6 @@ const RoundTimer: React.FC<RoundTimerProps> = ({ round, duration, playerChoice, 
       setSecondsLeft((prev) => {
         if (prev === 1) {
           clearInterval(interval);
-
-          // Auto-submit 'rock' if no choice is made
           if (!playerChoice) {
             socketService.makeChoice(roomId, 'rock');
           }
